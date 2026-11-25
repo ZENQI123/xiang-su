@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0b0d1a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>像素战记 · 策略卡牌防守</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="game-root">
+
+  <!-- 顶部状态栏 -->
+  <header id="topbar">
+    <div class="stat-block hp-block">
+      <span class="icon">❤</span>
+      <div class="stat-inner">
+        <span class="stat-label">基地生命</span>
+        <div class="bar"><div id="hp-fill" class="bar-fill hp"></div></div>
+        <span id="hp-text" class="stat-val">30 / 30</span>
+      </div>
+    </div>
+
+    <div class="stat-block simple">
+      <span class="icon gold">◈</span>
+      <span class="stat-label">金币</span>
+      <span id="gold-text" class="stat-val big">0</span>
+    </div>
+
+    <div class="stat-block simple">
+      <span class="icon ap">⚡</span>
+      <span class="stat-label">行动值</span>
+      <span id="ap-text" class="stat-val big">5 / 5</span>
+    </div>
+
+    <div class="stat-block simple">
+      <span class="icon round">▣</span>
+      <span class="stat-label">回合</span>
+      <span id="round-text" class="stat-val big">1 / 7</span>
+    </div>
+
+    <div class="stat-block simple level-tag">
+      <span id="level-name">第2关 · 双路守卫</span>
+    </div>
+
+    <div class="topbar-right">
+      <button id="btn-speed" class="mini-btn" title="点击切换战场倍速（当前 ×1）">⏩ 速度 ×1</button>
+      <button id="btn-sound" class="mini-btn" title="音效：开启（点击静音）">🔊</button>
+      <button id="btn-help" class="mini-btn">玩法</button>
+      <button id="btn-restart" class="mini-btn danger">主界面</button>
+    </div>
+  </header>
+
+  <!-- 主体：左战场 右卡牌/商店 -->
+  <main id="main-area">
+    <section id="battlefield-wrap">
+      <canvas id="board"></canvas>
+      <div id="float-layer"></div>
+      <div id="banner" class="hidden"></div>
+    </section>
+
+    <aside id="sidebar">
+      <div class="panel-title">手牌 · 召唤</div>
+      <div id="card-list"></div>
+
+      <!-- 商店（每关都有） -->
+      <div id="shop-panel">
+        <div class="panel-title shop-title">
+          <span>🏪 商店 · 常驻</span>
+        </div>
+        <div id="shop-list"></div>
+        <button id="btn-refresh" class="shop-refresh">刷新货架 ⚡1 ◈5</button>
+      </div>
+
+      <div class="panel-title">命令</div>
+      <div id="command-hint">
+        <p>点击 <b>士兵</b> 选中 → 点击 <b>地图格</b> 下达移动命令</p>
+        <p class="sub">移动<b>不消耗</b>行动值，可自由调度</p>
+      </div>
+
+      <button id="btn-end-turn" class="big-btn">结束回合 ▶</button>
+      <div id="log" class="log"></div>
+    </aside>
+  </main>
+
+  <!-- 结算遮罩 -->
+  <div id="overlay" class="hidden">
+    <div id="overlay-box">
+      <h1 id="overlay-title">胜利！</h1>
+      <p id="overlay-desc"></p>
+      <div class="overlay-btns">
+        <button id="overlay-next" class="big-btn next" style="display:none">进入下一关 ▶</button>
+        <button id="overlay-btn" class="big-btn alt">返回选关</button>
+        <button id="overlay-retry" class="big-btn alt" style="display:none">重打本关</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 精英 / BOSS 单位登场介绍 -->
+  <div id="unit-intro" class="hidden">
+    <div class="ui-vignette"></div>
+    <div class="ui-inner">
+      <div class="ui-tier" id="ui-tier">精英单位</div>
+      <div class="ui-art" id="ui-art">👹</div>
+      <div class="ui-name" id="ui-name">攻城领主</div>
+      <div class="ui-en" id="ui-en">ELITE · SIEGE WARLORD</div>
+      <div class="ui-tag" id="ui-tag"></div>
+      <ul class="ui-lines" id="ui-lines"></ul>
+    </div>
+  </div>
+
+  <!-- 帮助遮罩 -->
+  <div id="help-overlay" class="hidden">
+    <div id="help-box">
+      <h2>玩法说明</h2>
+      <div id="help-content">
+        <h3>目标</h3>
+        <p>守住基地，撑过本关规定的回合数。怪物进入基地会扣减基地生命，生命归零则失败。</p>
+
+        <h3>音效</h3>
+        <p>全部音效由浏览器实时合成（没有任何外部音频文件）。右上角 <b>🔊</b> 按钮可一键静音，设置会保存在本地。受浏览器策略限制，需要先点击一次页面，音效才会启用。</p>
+
+        <h3>精英 / BOSS 单位</h3>
+        <p>部分强敌登场时会播放<b>专属介绍横幅</b>（带音效），期间<b>战场短暂定格</b>——先看清它的能力再开打。</p>
+        <ul>
+          <li><b>👹 攻城领主 · 精英单位</b>：第二关 R7 / 第三关 R5 登场。统御光环让场上所有敌人攻击 +20%；每 10 秒「践踏」半径 2 格内的我方单位（8 伤）。</li>
+          <li><b>🐲 毁灭魔龙 · BOSS 单位</b>：第三关 R5 压轴。<b>飞行单位</b>，近战够不到，只能靠远程火力击落（320 血）；「定点轰炸」随机锁定我方单位，<b>半径 2 格红圈预警 3 秒</b>后爆发 20 伤（冷却 10 秒）——<b>轰炸不会伤及基地</b>，但看到预警圈要立刻把兵撤出去。</li>
+        </ul>
+
+        <h3>关卡解锁</h3>
+        <p>第 1 关默认开放。<b>通关当前关后自动解锁下一关</b>；未解锁的关卡在选关界面显示为灰色并带 🔒 标记，点击会提示解锁条件。通关进度会保存在本地，刷新页面不丢失。通关结算面板上会出现「进入下一关 ▶」按钮，可一键继续。</p>
+        <p><b>战斗进度自动保存</b>：每回合的行动阶段自动存档（含金币、行动值、场上士兵、商店与升级）。中途退出后，标题界面会出现「⟳ 继续上局」按钮，点击即可恢复；胜负结算后存档自动清除，开始新关卡会覆盖旧存档。</p>
+
+        <h3>行动值与召唤</h3>
+        <p>每回合拥有固定行动值（第一关 <b>4 点</b>，第二关 <b>5 点</b>）。召唤士兵（1点）、刷新货架（1点）会消耗行动值；<b>命令士兵移动不消耗行动值</b>。行动值耗尽后需结束回合。</p>
+        <p><b>每种兵每回合最多召唤 2 次</b>，每次消耗 1 行动值。卡牌左上角的 <b>●●</b> 圆点表示本回合剩余次数，用完后变暗并显示「已用完」，下回合重置。</p>
+
+        <h3>移动</h3>
+        <p>点选己方士兵 → 点击目标格下达移动命令，<b>不消耗行动值</b>。可在一回合内自由调度任意多次，把士兵摆到防线或矿场。</p>
+        <p class="sub">手机 / 平板：轻点即视为点击，操作方式与鼠标一致；屏幕顶部的提示条只作展示、<b>不会挡住战场</b>，几秒后自动消失。</p>
+
+        <h3>金币与结算时点</h3>
+        <ul>
+          <li><b>回合结束时</b>：结算全部产出（矿工产金 + 每回合低保 <b>10 金币</b>，所有关卡统一），金币立刻到账</li>
+          <li><b>回合开始时</b>：重置行动值与商店刷新次数</li>
+        </ul>
+        <p class="sub">两段结算互不重叠，同一笔收益不会被重复计算。</p>
+
+        <h3>地形（第二关起）</h3>
+        <ul>
+          <li><b>🌲 树林</b>：其中的单位受到远程伤害 -40%</li>
+          <li><b>⛰ 高地</b>：站上去的单位伤害 +25%</li>
+          <li><b>🟫 沼泽</b>：进入的单位移速 -50%</li>
+          <li><b>🪨 岩石</b>：完全不可通行，敌人必须绕行</li>
+        </ul>
+        <p class="sub">第一关是教学关，不放地形；第二关起每关都有自己的地形分布：第二、四关有成片岩壁把战场切开，第三关是零散的林地 / 高地 / 沼泽，第五关是一整圈环形岩壁。</p>
+
+        <h3>商店（所有关卡通用）</h3>
+        <ul>
+          <li>常驻面板，货架 3 格；购买<b>只花金币，不消耗行动值</b></li>
+          <li><b>新兵种卡</b> 20 金币（盾卫 / 枪炮手）</li>
+          <li><b>Lv2 升级卡</b> 30 金币，<b>Lv3 升级卡</b> 50 金币</li>
+          <li><b>刷新货架</b>：1 行动值 + 5 金币，每回合最多 2 次</li>
+          <li>升级的唯一途径就是购买升级卡（手牌上没有升级按钮）</li>
+          <li>升级收益：<b>血 / 伤 / 攻速 / 移速</b> 每级 ×1.5；<b>攻击距离每级只 +0.5 倍</b>（Lv2 ×1.5 / Lv3 ×2）——射程不会随等级复利暴涨</li>
+        </ul>
+
+        <h3>士兵</h3>
+        <p class="sub">每种兵每回合最多召唤 2 次（各消耗 1 行动值）；同一兵种<b>场上上限 4 名</b>（矿工同为 4 名，与 4 格矿场对齐）——需先折损才能增援。</p>
+        <ul>
+          <li><b>剑士</b>：22血，近战，射程1格，伤害1.1，攻速1/秒，移速1格/秒</li>
+          <li><b>弓箭手</b>：12血，远程，射程6格，伤害0.95，攻速0.8/秒，移速0.8格/秒</li>
+          <li><b>矿工</b>：10血，无法攻击，需下令走到矿场，每回合产 10 金币（多矿工叠加，上限 4 名）</li>
+          <li><b>盾卫</b>（第二关新卡）：32血，近战，自带<b>嘲讽</b>（4 格内敌人优先打它）</li>
+          <li><b>枪炮手</b>（第二关新卡）：14.4血，远程<b>5格</b>，伤害1.875，自带<b>溅射</b></li>
+          <li><b>守卫者</b>（第五关解锁 · 商店 75 金币）：80血，近战 3 伤，<b>等级恒为 1 级</b>；<b>场上限 1 名</b>、召唤耗 <b>2 行动值</b>；在场时全场友军攻击 <b>+15%</b>（含自身），自身受伤 <b>-20%</b>，阵亡时对周围 <b>2 格</b>敌人炸 <b>66</b> 伤</li>
+        </ul>
+        <p class="sub">指挥：点击场上自己的士兵即可选中，再点地图格下令移动（<b>不消耗行动值</b>）。<b>敌方行动期间同样可以指挥</b>——毁灭魔龙的轰炸预警圈亮起后，趁 3 秒预警把圈里的士兵撤走。（事件结算阶段与二选一弹窗打开时不能指挥。）</p>
+
+        <h3>出怪预告</h3>
+        <p class="sub">每个 <b>出怪口</b>旁边都会挂一块小面板，列出<b>本回合这个口还会放出哪些敌人</b>（图标 × 数量，双路关分上下两路）——排兵布阵时就能提前看到要来什么、来几只。全部放完后面板变灰并标记「✓ 本回合已出完」。</p>
+
+        <h3>战场倍速</h3>
+        <p class="sub">右上角 <b>⏩ 速度 ×1 / ×2</b> 可随时切换二倍速：单位移动、攻击、弹道、轰炸预警等战场推进整体加快，操作与弹窗节奏不变。偏好会被记住，下次进入游戏自动生效。</p>
+
+        <h3>升级被动（购买升级卡解锁）</h3>
+        <ul>
+          <li>剑士 Lv2 <b>盾墙</b>（近战受伤 -25%）/ Lv3 <b>反击</b>（反弹伤害）</li>
+          <li>弓箭手 Lv2 <b>连射</b> / Lv3 <b>穿透</b>（箭矢穿过敌人）</li>
+          <li>矿工 Lv2 <b>勘探</b>（+5金/回合）/ Lv3 <b>自动化</b>（随处产金）</li>
+          <li>盾卫 Lv2 <b>铁壁</b>（受伤 -20%）/ Lv3 <b>羁绊</b>（为友军分担伤害）</li>
+          <li>枪炮手 Lv2 <b>爆破</b>（溅射范围扩大）/ Lv3 <b>震撼</b>（命中减速）</li>
+        </ul>
+
+        <h3>双路地图（第二关 / 第四关）</h3>
+        <p>上路通往<b>矿场</b>，下路直达<b>基地</b>，中间被成片<b>岩壁隔开</b>，两路只在基地门口汇合——需要分兵把守。</p>
+        <p class="sub">第五关不是双路：基地在正中，被一圈环形岩壁圈住，东 / 西 / 南三处是缺口，三个出怪口各攻一门。</p>
+        <p class="sub">注意：只有【矿场破坏者】会主动扑向矿场杀矿工，其他怪物一律优先奔向基地。</p>
+
+        <h3>回合流程（第二关 7 回合）</h3>
+        <ol>
+          <li><b>第1回合</b>：事件——剑士 / 弓箭手 / 矿工 三选一，同时下路来 <b>1 只小怪</b>开场（每关第一回合都固定如此）</li>
+          <li><b>第2回合</b>：下路刷 2 只小怪</li>
+          <li><b>第3回合</b>：上路 1 小怪 + 下路 2 小怪</li>
+          <li><b>第4~6回合</b>：破坏者 / 萨满 / 狼骑 / 攻城槌 / 飞行怪陆续登场</li>
+          <li><b>第7回合</b>：BOSS 攻城领主压阵</li>
+        </ol>
+        <p class="sub">注意：回合开始时可能触发事件。<b>负面事件直接生效</b>（不再让你挑），<b>增益事件仍是二选一</b>；增益弹窗打开时<b>战场暂停</b>，选完立即恢复。负面与增益的长期概率各占一半，且不会连着两个正面、也不会连着三个负面。负面事件里的「敌军狂暴」会让本回合敌方移动速度变为 1.5 倍。增益事件池：空投军饷 / 战前动员（行动值可突破上限）/ 基地修缮 / 火力支援（本回合伤害+30%）/ 天官赐福（随机一名己方单位数值翻倍），另有低概率稀有事件「天降神兵」——召唤 80 血 / 3 攻的守卫者。负面事件池：基地受损 / 小偷来袭 / 敌军狂暴 / 全军疲惫 / 苛捐杂税 / 天打雷劈（稀有，权重较低；锁定 2 名己方单位，落下 5 道雷，每道 7 伤、半径 1 格、不伤基地；每道雷有 2 秒预警、雷与雷间隔 3 秒，被锁定的单位走开就能躲）。</p>
+        <p class="sub">行动值上限每回合固定重置（第二关仍是 5 点）：事件「战前动员」与商店「军饷」临时给的行动值<b>可以超出上限</b>，但下回合开始时照常回到上限值。</p>
+        <p class="sub">每关<b>第 1 回合</b>都会先放 1 只小怪（不受出怪倍率影响），让开局就有交火、不至于空转。</p>
+      </div>
+      <button id="help-close" class="big-btn">知道了</button>
+    </div>
+  </div>
+
+  <!-- ① 标题界面 -->
+  <div id="title-screen">
+    <div class="ts-scanline"></div>
+    <div class="ts-inner">
+      <div class="ts-logo">
+        <span class="ts-logo-px">像</span><span class="ts-logo-px">素</span><span class="ts-logo-px">战</span><span class="ts-logo-px">记</span>
+      </div>
+      <div class="ts-en">PIXEL TACTICS</div>
+      <div class="ts-tagline">召唤 · 布阵 · 守住基地</div>
+      <button id="btn-continue" class="ts-start ts-continue" style="display:none">⟳ 继续上局</button>
+      <button id="btn-abandon" class="ts-abandon" style="display:none">✕ 放弃上局</button>
+      <button id="btn-start" class="ts-start">▶ 开始游戏</button>
+      <div id="ts-progress" class="ts-progress" style="display:none"></div>
+      <div class="ts-foot">
+        <button id="btn-codex" class="ts-link">图鉴</button>
+        <span class="ts-dot">·</span>
+        <button id="btn-help-title" class="ts-link">玩法说明</button>
+        <span class="ts-dot">·</span>
+        <span class="ts-ver">v1.0 · 正式版</span>
+      </div>
+      <div class="ts-hint">按 <b>空格</b> 或点击开始</div>
+    </div>
+  </div>
+
+  <!-- ② 关卡选择 -->
+  <div id="level-select" class="hidden">
+    <div id="level-select-box">
+      <div class="ls-head">
+        <h1 class="ls-title">选择关卡</h1>
+        <p class="ls-sub">SELECT STAGE</p>
+      </div>
+      <div id="level-cards"></div>
+      <button id="ls-back" class="ls-back">◀ 返回标题</button>
+    </div>
+  </div>
+
+  <!-- ③ 关卡简报（触发游戏前的过场） -->
+  <div id="codex" class="hidden">
+    <div id="codex-box">
+      <h2>图鉴</h2>
+      <div id="codex-count" class="cx-count"></div>
+      <div class="cx-tabs">
+        <button id="cx-tab-units" class="cx-tab on">兵种</button>
+        <button id="cx-tab-monsters" class="cx-tab">怪兽</button>
+        <button id="cx-tab-events" class="cx-tab">事件</button>
+      </div>
+      <div id="codex-list" class="cx-list"></div>
+      <div class="cx-foot">
+        <button id="cx-reset" class="cx-reset">重置进度</button>
+        <button id="codex-close" class="cx-close">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="evcard" class="hidden">
+    <div id="evcard-box">
+      <div id="evcard-tag">负面事件</div>
+      <div id="evcard-name"></div>
+      <div id="evcard-desc"></div>
+    </div>
+  </div>
+
+  <div id="draft" class="hidden">
+    <div id="draft-box">
+      <h2>出征阵容</h2>
+      <p class="draft-tip">基础士兵固定登场；商店兵种最多选 <b>2</b> 个（也可以不选）——<b>没选的本关商店不出现</b>。</p>
+      <div class="draft-sec">
+        <div class="draft-h">基础士兵 · 必选</div>
+        <div id="draft-fixed" class="draft-row"></div>
+      </div>
+      <div class="draft-sec">
+        <div class="draft-h">商店兵种 · 可选 <span id="draft-count">0/2</span></div>
+        <div id="draft-optional" class="draft-row"></div>
+      </div>
+      <button id="draft-go">开始战斗 ▶</button>
+    </div>
+  </div>
+
+  <div id="briefing" class="hidden">
+    <div class="brief-inner">
+      <div class="brief-stage" id="brief-stage">STAGE 1</div>
+      <h1 class="brief-name" id="brief-name">守卫基地</h1>
+      <p class="brief-desc" id="brief-desc"></p>
+      <div class="brief-tags" id="brief-tags"></div>
+      <div class="brief-go" id="brief-go">▶ 进入战场</div>
+      <div class="brief-tip">点击任意处开始</div>
+    </div>
+  </div>
+
+</div>
+
+<script src="game.js"></script>
+</body>
+</html>
